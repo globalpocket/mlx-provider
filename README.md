@@ -1,6 +1,19 @@
 # mlx-provider
 A VS Code extension that provides Apple's MLX models as a Language Model API, featuring automated local server and model management. AppleのMLXモデルをLanguage Model APIとして提供し、ローカルサーバーとモデルの自動管理を備えたVS Code拡張機能。
 
+## インストール
+
+1. VS Code に拡張機能をインストールします。
+   - 配布済みの `.vsix` を使う場合は、VS Code の拡張機能画面から「VSIX からインストール」を選択します。
+   - 開発用にリポジトリを直接利用する場合は、ワークスペースを開いたうえで拡張機能として読み込みます。
+2. 初回起動を待ちます。
+   - 拡張機能は [`package.json`](package.json:15) にある `onStartupFinished` で有効化されます。
+   - 起動時にローカルサーバー管理が開始され、必要な Python 仮想環境は拡張側で自動準備されます。
+3. 必要に応じて既定設定を確認します。
+   - サーバーの待ち受け先は `mlxProvider.server.host` と `mlxProvider.server.port` で指定します。
+   - 既定モデルは `mlxProvider.model.defaultModel` です。
+   - 既定値は [`package.json`](package.json:19) に定義されています。
+
 ## 使用方法
 
 ### 1. インストール後の自動セットアップ

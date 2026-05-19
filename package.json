@@ -1,0 +1,51 @@
+{
+  "name": "mlx-provider",
+  "displayName": "MLX Provider",
+  "description": "VS Code extension that provides Apple MLX models via Language Model API with local server management",
+  "version": "0.0.1",
+  "private": true,
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "MLX Provider",
+      "properties": {
+        "mlxProvider.server.port": {
+          "type": "number",
+          "default": 8080,
+          "description": "Port used by the local MLX server"
+        },
+        "mlxProvider.server.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host used by the local MLX server"
+        },
+        "mlxProvider.model.defaultModel": {
+          "type": "string",
+          "default": "mlx-community/Qwen3.5-9B-4bit",
+          "description": "Default MLX model identifier"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "vitest": "2.1.9",
+    "@vitest/coverage-v8": "2.1.9",
+    "typescript": "5.6.3",
+    "@types/node": "20.17.57",
+    "@types/vscode": "1.90.0"
+  }
+}

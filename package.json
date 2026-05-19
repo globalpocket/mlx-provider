@@ -31,7 +31,7 @@
         },
         "mlxProvider.model.defaultModel": {
           "type": "string",
-          "default": "mlx-community/Qwen3.5-9B-4bit",
+          "default": "mlx-community/Qwen3.5-9B-OptiQ-4bit",
           "description": "Default MLX model identifier"
         }
       }

@@ -17,7 +17,7 @@ type ServerConfig = {
 
 const DEFAULT_SERVER_PORT = 8080;
 const DEFAULT_SERVER_HOST = "127.0.0.1";
-const DEFAULT_MODEL_ID = "mlx-community/Qwen3.5-9B-4bit";
+const DEFAULT_MODEL_ID = "mlx-community/Qwen3.5-9B-OptiQ-4bit";
 
 export function getExtensionConfig(): ExtensionConfig {
   const config = vscode.workspace.getConfiguration("mlxProvider");

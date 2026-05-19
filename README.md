@@ -1,6 +1,31 @@
 # mlx-provider
 A VS Code extension that provides Apple's MLX models as a Language Model API, featuring automated local server and model management. AppleのMLXモデルをLanguage Model APIとして提供し、ローカルサーバーとモデルの自動管理を備えたVS Code拡張機能。
 
+## 使用方法
+
+### 1. インストール後の自動セットアップ
+
+- 拡張機能は起動時に自動で有効化され、ローカルの MLX サーバー管理を開始します。
+- 必要な Python 仮想環境は拡張側の実行基盤で自動的に準備されます。
+- 初期状態では、`mlx-community/Qwen3.5-9B-4bit` が既定のモデルとして利用されます。
+
+### 2. 主要設定項目
+
+`package.json` の設定は `mlxProvider` 配下で提供されます。必要に応じて VS Code の設定画面から変更できます。
+
+| 設定項目 | 既定値 | 説明 |
+| --- | --- | --- |
+| `mlxProvider.server.port` | `8080` | ローカル MLX サーバーが待ち受けるポート |
+| `mlxProvider.server.host` | `127.0.0.1` | ローカル MLX サーバーが利用するホスト |
+| `mlxProvider.model.defaultModel` | `mlx-community/Qwen3.5-9B-4bit` | 既定で利用する MLX モデル識別子 |
+
+### 3. 起動後の利用イメージ
+
+- VS Code 起動後、拡張機能が Language Model API の提供口を登録します。
+- ローカル MLX サーバーは設定値に従って起動し、停止時までライフサイクル管理されます。
+- 利用者は VS Code の Language Model 対応機能から、ローカルの MLX モデルを API 経由で呼び出す想定です。
+- モデル管理は拡張内部の責務として扱われ、利用者は基本的に設定とモデル識別子だけを意識すればよい構成です。
+
 ## Release Notes
 
 ### v0.0.1

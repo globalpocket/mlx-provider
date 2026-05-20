@@ -3,6 +3,10 @@
   "displayName": "MLX Provider",
   "description": "VS Code extension that provides Apple MLX models via Language Model API with local server management",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/globalpocket/mlx-provider"
+  },
   "private": true,
   "publisher": "local",
   "engines": {

@@ -43,7 +43,9 @@
   },
   "scripts": {
     "test": "vitest run",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "build": "tsc -p ./",
+    "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
     "vitest": "2.1.9",

@@ -7,10 +7,12 @@ let serverManager: ServerManager | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   serverManager = new ServerManager();
 
-  const provider = new MlxLanguageModelProvider(serverManager);
-  const disposable = provider.register();
+  const provider = new MlxLanguageModelProvider(serverManager, (providerInstance) => {
+    return providerInstance.register();
+  });
+  const providerDisposable = provider.register();
 
-  context.subscriptions.push(disposable);
+  context.subscriptions.push(providerDisposable);
 }
 
 export async function deactivate(): Promise<void> {

@@ -64,3 +64,36 @@
 
 - 最初の委任は PR 作成直前の最終調整として orchestrator に引き継ぐ。
 - 根拠: 設計、計画、packaging、security、review の整合は完了しており、以後は Markdown 更新ではなく PR 生成フローの調整が最小権限となる。
+
+## Issue #8 実行計画: OutputChannel 初期化境界固定
+
+### 実行方針
+
+- 対象は [`src/extension.ts`](../src/extension.ts) と [`tests/extension.test.ts`](../tests/extension.test.ts) のみに限定する。
+- Action Contract に従い、本タスクでは設計と計画の更新のみを行い、実装・テスト実行・妥当性判定は後続モードへ分離する。
+- SoD 分離された TDD 順序を厳守し、1 サブタスク 1 目的を維持する。
+- 各サブタスクは Red→Green→Refactor と coverage 85%以上の完了条件を明記する。
+
+### SoD 分離チェックリスト
+
+- [ ] **Issue8-Task1 / test-writer**: [`tests/extension.test.ts`](../tests/extension.test.ts) のみを編集し、OutputChannel 初期化境界を固定する Red テストを追加する。Acceptance Criteria: Red 失敗を意図したテストのみ追加されること、`createOutputChannel` 未呼び出しまたは呼び出し回数不一致を検出できること、チャネル名 `MLX Provider Trace` の不一致を失敗として検出できること、実装コードと設定ファイルを変更しないこと。
+- [ ] **Issue8-Task2 / tester**: Issue8-Task1 のテスト実行結果を取得し、Expected Red Signature と一致する失敗を確認する。Acceptance Criteria: 実行コマンド、終了コード、失敗テスト名、主要エラーが要約されること、一致する Red 失敗を成功条件として記録すること。
+- [ ] **Issue8-Task3 / consistency-checker**: Red 結果が「OutputChannel 未生成または回数不一致」シグネチャと一致するか検証する。Acceptance Criteria: Red 成立/不成立が明示されること、不一致時は code/debug へ進まず差し戻し判断が示されること。
+- [ ] **Issue8-Task4 / code**: [`src/extension.ts`](../src/extension.ts) のみを編集し、OutputChannel 生成 1 回・同名固定・再利用契約を満たす最小実装を行う。Acceptance Criteria: Red→Green→Refactor を踏むこと、`vscode.window.createOutputChannel` の初期化境界が局所化されること、既存の provider 登録契約と `deactivate()` の停止契約を破壊しないこと、編集対象が 1 ファイルに限定されること。
+- [ ] **Issue8-Task5 / tester**: Issue8-Task4 後の関連ユニットテストと coverage を再実行し Green を確認する。Acceptance Criteria: 失敗テストが解消されること、対象 coverage 85%以上が数値で確認できること、重複生成がないことをテスト結果で確認できること。
+- [ ] **Issue8-Task6 / consistency-checker**: Green 結果と coverage 品質ゲートを検証する。Acceptance Criteria: coverage 85%以上、Red で固定した失敗条件が Green で解消された事実、Forbidden Files 非変更が確認されること。
+- [ ] **Issue8-Task7 / security-auditor**: OutputChannel 境界変更に対するセキュリティ監査を実施する。Acceptance Criteria: ハードコード秘密情報なし、不要依存追加なし、監査 Pass/Fail と重大指摘有無が提示されること。
+- [ ] **Issue8-Task8 / reviewer**: 設計整合性と責務分割の最終監査を実施する。Acceptance Criteria: [`plans/design.md`](./design.md) の Issue #8 設計と実装が整合すること、差し戻し要否が明示されること、TDD と SoD の実行証跡が確認できること。
+
+### タスク別スコープ固定
+
+- Read Files: [`plans/design.md`](./design.md), [`plans/task_plan.md`](./task_plan.md), [`src/extension.ts`](../src/extension.ts), [`tests/extension.test.ts`](../tests/extension.test.ts)
+- Edit Files (実装フェーズ): [`tests/extension.test.ts`](../tests/extension.test.ts), [`src/extension.ts`](../src/extension.ts)
+- Forbidden Files: [`package.json`](../package.json) および Issue #8 の目的外ファイル全般
+
+### 品質ゲート
+
+- TDD: Red 失敗確認 → Green 最小実装 → 必要最小限 Refactor
+- Coverage: 対象テスト群で 85%以上
+- SoD: test-writer→tester→consistency-checker→code/debug→tester→consistency-checker→security-auditor→reviewer
+- 監査: security-auditor Pass かつ reviewer Pass

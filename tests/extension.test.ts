@@ -85,4 +85,13 @@ describe("extension entry", () => {
     await deactivate();
     expect(doubles.stopSpy).toBeCalledTimes(1);
   });
+
+  it("activate calls createOutputChannel once with name 'MLX Provider Trace'", async () => {
+    const { activate } = await import("../src/extension");
+
+    await activate(context);
+
+    expect(vscodeMocks.createOutputChannel).toBeCalledTimes(1);
+    expect(vscodeMocks.createOutputChannel).toHaveBeenCalledWith("MLX Provider Trace");
+  });
 });

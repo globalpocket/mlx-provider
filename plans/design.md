@@ -298,3 +298,84 @@ tests/
 - packaging 契約の第一編集点は引き続き [package.json](../package.json) とする。
 - [tsconfig.json](../tsconfig.json) は `dist/extension.js` と出力先不整合が再発した場合のみ編集対象へ昇格する。
 - 実在未確認ツールや追加の build 経路を設計へ持ち込まず、現行の prepublish 導線を維持する。
+
+## 13. Issue #8: OutputChannel 初期化境界の固定
+
+### 13.1 目的
+
+- issue `globalpocket/mlx-provider#8` の要求に従い、[`activate()`](../src/extension.ts:7) で trace 用 `OutputChannel` を専用名で初期化し、同一拡張ライフサイクル内で再利用する契約を Red→Green で固定する。
+- OutputChannel 生成責務を明示的な境界へ分離し、[`src/extension.ts`](../src/extension.ts) の可観測な挙動をテストで固定する。
+
+### 13.2 スコープ
+
+#### 対象
+
+- [`src/extension.ts`](../src/extension.ts) 内の OutputChannel 生成経路の責務分割。
+- trace チャネル名の固定。
+- 生成 1 回・再利用の契約化。
+- [`tests/extension.test.ts`](../tests/extension.test.ts) による Red 先行テスト観点の明確化。
+
+#### 非対象
+
+- provider 実装や server 起動契約の再設計。
+- OutputChannel へのログ出力内容の仕様化。
+- [package.json](../package.json) や CI 設定の変更。
+
+### 13.3 責務分割
+
+- **拡張エントリ責務**（[`activate()`](../src/extension.ts:7)）
+  - trace チャネルの取得を専用境界へ委譲する。
+  - `OutputChannel` の生成詳細を `activate()` 本体に直書きしない。
+  - Provider 登録と `context.subscriptions` への登録を継続する。
+
+- **初期化境界責務**（`src/extension.ts` のモジュール内ヘルパー）
+  - `vscode.window.createOutputChannel` を呼ぶ唯一の入口を提供する。
+  - 既存インスタンスがある場合は同一参照を返し、重複生成しない。
+  - チャネル名を定数として固定し、テストで検証可能にする。
+
+### 13.4 公開インターフェース方針
+
+- 外部公開 API は増やさず、[`activate()`](../src/extension.ts:7) / [`deactivate()`](../src/extension.ts:18) の契約を維持する。
+- `OutputChannel` 境界は module-private 関数として保持し、次の内部インターフェースを設計契約とする。
+
+```ts
+const TRACE_OUTPUT_CHANNEL_NAME = "MLX Provider Trace";
+
+function getOrCreateTraceOutputChannel(
+  vscodeApi: Pick<typeof vscode, "window"> = vscode,
+): vscode.OutputChannel;
+```
+
+- `getOrCreateTraceOutputChannel()` 契約:
+  - 初回呼び出し時のみ `vscodeApi.window.createOutputChannel(TRACE_OUTPUT_CHANNEL_NAME)` を 1 回実行する。
+  - 2 回目以降はキャッシュ済み `OutputChannel` を返し、追加生成しない。
+
+### 13.5 テスト観点（TDD）
+
+#### Red
+
+- [`tests/extension.test.ts`](../tests/extension.test.ts) で次を先に失敗させる。
+  1. [`activate()`](../src/extension.ts:7) 実行時に `createOutputChannel` が未呼び出しなら失敗。
+  2. 呼び出し名が `MLX Provider Trace` と不一致なら失敗。
+  3. 同一ライフサイクル想定で重複生成が発生する実装なら失敗。
+
+#### Green
+
+- [`src/extension.ts`](../src/extension.ts) に最小実装を追加し、上記 Red を解消する。
+- 既存の provider 登録契約と `ServerManager` 後始末契約を壊さない。
+
+#### Refactor
+
+- `activate()` の可読性を維持しつつ、OutputChannel 初期化処理を helper 関数へ局所化する。
+- API 境界（公開 / 非公開）を維持し、外部公開面を増やさない。
+
+#### Evaluation
+
+- ユニットテスト成功を確認する。
+- 対象テスト群で coverage 85%以上を維持する。
+
+### 13.6 受け入れ条件へのトレーサビリティ
+
+- **OutputChannel初期化境界の固定化**: `createOutputChannel` 呼び出しを専用境界へ限定し、重複生成なしをテストで固定。
+- **テスト先行**: Red 失敗（未呼び出し / 回数不一致 / 名前不一致）を先に確認。
+- **Coverage 85%以上維持**: テスト実行フェーズで継続評価し、品質ゲートとして必須化。

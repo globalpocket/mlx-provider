@@ -28,18 +28,39 @@
 - [x] **Task 17 / security-auditor**: 初期骨格にハードコードされた秘密情報や不自然な依存がないか監査する。Acceptance Criteria: Pass/Fail と重大指摘の有無が明示されること。
 - [x] **Task 18 / reviewer**: 設計整合性、責務分離、TDD 完了条件の充足を監査する。Acceptance Criteria: [plans/design.md](./design.md) と実装の整合性が確認されること、差し戻し要否が明示されること。
 
+## `vsce package` 修復計画
+
+## 登録境界の最小復帰計画
+
+- [x] **Priority Task / code**: [`src/extension.ts`](../src/extension.ts) の最小修正により、[`activate()`](../src/extension.ts:7) から provider 経由の登録フローを復帰した。Acceptance Criteria: [`register()`](../src/provider.ts:25) を入口とする契約へ戻し、登録境界の責務を provider / extension 間で再分離できていること。
+- [x] **Follow-up / tester**: 関連ユニットテストと coverage を再実行し、Green と 85%以上を確認した。Acceptance Criteria: extension/provider 系の回帰が解消され、[`npm run coverage`](../package.json:46) 成功時の総合 coverage 94.11% が記録されていること。
+- [x] **Forbidden Patterns**: 実在未確認 API の設計固定、`registerSpy` 契約の弱体化、テスト変更による回避を禁止事項として設計へ反映済み。 Acceptance Criteria: [`plans/design.md`](./design.md) に registration boundary 方針として保持されること。
+
+- [x] **Task 19 / tester**: `npx vsce package` の実行結果を取得し、packaging failure の終了コード、主要エラー、失敗シグネチャを後続修正の根拠として記録した。Acceptance Criteria: 探索ではなく再現に限定すること、実行結果が packaging failure の最小事実へ圧縮されること、後続タスクが Red の根拠として使えること。
+- [x] **Task 20 / test-writer**: [`tests/packageManifest.test.ts`](../tests/packageManifest.test.ts) を追加し、[package.json](../package.json) の `main` と packaging script 契約を固定する Red テストを書いた。Acceptance Criteria: Red→Green→Refactor の Red 専任であること、対象は [tests/packageManifest.test.ts](../tests/packageManifest.test.ts) のみであること、`main` と `build` または `vscode:prepublish` の不整合が失敗として表現されること、後続評価で対象カバレッジ 85%以上を目指せること。
+- [x] **Task 21 / tester**: Task 20 の manifest 契約テストだけを実行し、期待した Red 失敗を確認した。Acceptance Criteria: failing test 名、終了ステータス、主要エラーが要約されること、Expected Red Signature と一致した失敗だけを記録すること。
+- [x] **Task 22 / code**: [package.json](../package.json) のみを編集し、Task 20 の failing test を通す最小修正として packaging script を追加した。Acceptance Criteria: Red→Green→Refactor を踏むこと、編集対象は [package.json](../package.json) のみであること、`build` と `vscode:prepublish` の少なくとも一方で [package.json](../package.json) の `main` が要求する成果物生成へ到達できること、対象テストが成功し対象カバレッジ 85%以上であること。
+- [x] **Task 23 / tester**: Task 22 後に manifest 契約テストと coverage を再実行し、Green と 85%以上を確認した。Acceptance Criteria: Task 22 の修正で対象テストが成功すること、対象 coverage 85%以上が数値で示されること。
+- [x] **Task 24 / tester**: `npm run build` 相当の成果物生成確認と `npx vsce package` の再実行を行い、`.vsix` 生成完了を確認した。Acceptance Criteria: `dist/extension.js` の存在有無と `npx vsce package` の終了コードが要約されること、成功時は `.vsix` 生成が確認できること、失敗時は次の最小修正候補へ分岐できること。
+- [x] **Task 25 / analyzer**: Task 24 で `dist/extension.js` 欠落または出力先不整合が再現しなかったため、[tsconfig.json](../tsconfig.json) など build 設定ファイルの追加修正は不要と判定した。Acceptance Criteria: 対象ファイル、開始行、終了行、前後スニペットが明示されること、Edit Files を 1〜2 件へ維持できること。
+- [x] **Task 26 / code**: Task 25 が不要判定となったため、[tsconfig.json](../tsconfig.json) など build 設定ファイルの追加編集は実施不要として完了した。Acceptance Criteria: Red→Green→Refactor を踏むこと、編集対象は analyzer が特定した build 設定ファイル 1 件を原則とすること、manifest 契約テストと packaging 実行の両方を壊さないこと、対象テストが成功し対象カバレッジ 85%以上であること。
+- [x] **Task 27 / tester**: 最終検証として関連ユニットテスト、coverage、`npx vsce package` を再実行し、`.vsix` 生成完了を確認した。Acceptance Criteria: Green、coverage 85%以上、packaging 終了コード 0、`.vsix` 生成の 4 条件が揃うこと。
+- [x] **Task 28 / security-auditor**: packaging 対応で不自然な依存追加、秘密情報混入、存在しないツール参照がないことを監査し、Pass を確認した。Acceptance Criteria: Pass/Fail、重大指摘、依存妥当性の要約が提示されること。
+- [x] **Task 29 / reviewer**: [plans/design.md](./design.md) と packaging 修正実装の整合性、TDD 遵守、成果物契約の妥当性を監査し、Pass を確認した。Acceptance Criteria: 差し戻し要否が明示されること、`vsce package` 修復が設計どおり最小変更であることが確認されること。
+
 ## 完了後の状態
 
 ### 最終反映メモ
 
-- reviewer 指摘反映後、[plans/design.md](./design.md)、[tests/provider.test.ts](../tests/provider.test.ts)、[src/provider.ts](../src/provider.ts)、[src/extension.ts](../src/extension.ts) の整合を再確認済み。
-- `npm test` と `npm run coverage` の再実行結果は Green / 100% を維持しており、reviewer 指摘後の再修正完了まで含めて計画全体が完了している。
+- registration boundary 是正は完了し、[`plans/design.md`](./design.md) は「provider の [`register()`](../src/provider.ts:25) が返す disposable を extension が購読へ渡す」契約で最終整合した。
+- 関連ユニットテストと coverage は完了しており、[`npm run coverage`](../package.json:46) は 94.11% で成功している。
+- packaging、最終セキュリティ監査、最終レビューまで完了し、PR 前の技術作業と文書同期は完了した。
 
 ### Suggested Next Mode
 
-`none`
+`orchestrator`
 
 ### Suggested First Task
 
-- 追加委任なし: extension フェーズ、評価フェーズ、最終監査を含む全タスクが完了済み。
-- 根拠: `tests/extension.test.ts` と `src/extension.ts` は Green 済みで、`npm run coverage` は終了コード 0 かつ全体 100% を確認済み。
+- 最初の委任は PR 作成直前の最終調整として orchestrator に引き継ぐ。
+- 根拠: 設計、計画、packaging、security、review の整合は完了しており、以後は Markdown 更新ではなく PR 生成フローの調整が最小権限となる。

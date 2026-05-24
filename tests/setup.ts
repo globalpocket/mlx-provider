@@ -31,6 +31,9 @@ vi.mock("vscode", () => ({
   workspace: {
     getConfiguration: vscodeMocks.getConfigurationMock,
   },
+  lm: {
+    registerChatModelProvider: vi.fn(),
+  },
 }));
 
 // Expose mocked vscode as globalThis.vscode for provider.ts which uses global vscode reference
@@ -40,6 +43,9 @@ vi.mock("vscode", () => ({
   },
   workspace: {
     getConfiguration: vscodeMocks.getConfigurationMock,
+  },
+  lm: {
+    registerChatModelProvider: vi.fn(),
   },
 };
 

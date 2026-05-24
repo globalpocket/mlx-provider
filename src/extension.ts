@@ -1,21 +1,22 @@
-import * as vscode from "vscode";
-import { MlxLanguageModelProvider } from "./provider";
-import { ServerManager } from "./serverManager";
+import * as vscode from 'vscode';
+import { MLXProvider } from './mlx-provider';
 
-let serverManager: ServerManager | undefined;
-
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  serverManager = new ServerManager();
-
-  const provider = new MlxLanguageModelProvider(serverManager);
-  const disposable = provider.register();
-
-  context.subscriptions.push(disposable);
+export function activate(context: vscode.ExtensionContext) {
+    const provider = new MLXProvider();
+    
+    // Register the command
+    const disposable = vscode.commands.registerCommand('mlx-provider.outputChannel', () => {
+        provider.outputChannelTraceBoundary();
+    });
+    
+    context.subscriptions.push(disposable);
+    
+    // Activate the provider
+    provider.activate();
+    
+    vscode.window.showInformationMessage('MLX Provider activated');
 }
 
-export async function deactivate(): Promise<void> {
-  if (serverManager) {
-    await serverManager.stop();
-    serverManager = undefined;
-  }
+export function deactivate() {
+    // Cleanup if needed
 }

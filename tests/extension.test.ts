@@ -48,8 +48,10 @@ describe("extension entry", () => {
   let context: { subscriptions: Array<{ dispose: () => void }> };
 
   beforeEach(() => {
+    vi.resetModules();
     vscodeMocks.getConfigurationMock.mockClear();
     vscodeMocks.getMock.mockClear();
+    vscodeMocks.createOutputChannel.mockClear();
     doubles.stopSpy.mockClear();
     doubles.disposable.dispose.mockClear();
     doubles.registerSpy.mockClear();
@@ -93,5 +95,91 @@ describe("extension entry", () => {
 
     expect(vscodeMocks.createOutputChannel).toBeCalledTimes(1);
     expect(vscodeMocks.createOutputChannel).toHaveBeenCalledWith("MLX Provider Trace");
+  });
+
+  describe("activate lifecycle trace logs", () => {
+    const getOutputAppendLineSpy = () => {
+      const outputChannel =
+        vscodeMocks.createOutputChannel.mock.results.at(-1)?.value as
+          | { appendLine: ReturnType<typeof vi.fn> }
+          | undefined;
+
+      return outputChannel?.appendLine ?? vi.fn();
+    };
+
+    it("activate emits start trace and ready trace", async () => {
+      const { activate } = await import("../src/extension");
+
+      await activate(context);
+
+      const appendLineSpy = getOutputAppendLineSpy();
+
+      const logs = appendLineSpy.mock.calls.map(([log]) => String(log));
+
+      expect(logs).toContain("activate start");
+      expect(logs).toContain("activate ready");
+    });
+
+    it("activate emits start before ready", async () => {
+      const { activate } = await import("../src/extension");
+
+      await activate(context);
+
+      const appendLineSpy = getOutputAppendLineSpy();
+
+      const logs = appendLineSpy.mock.calls.map(([log]) => String(log));
+      const startIndex = logs.indexOf("activate start");
+      const readyIndex = logs.indexOf("activate ready");
+
+      expect(startIndex).toBeGreaterThanOrEqual(0);
+      expect(readyIndex).toBeGreaterThanOrEqual(0);
+      expect(startIndex).toBeLessThan(readyIndex);
+    });
+
+    it("activate fails when start/ready are missing", async () => {
+      const { activate } = await import("../src/extension");
+
+      await activate(context);
+
+      const appendLineSpy = getOutputAppendLineSpy();
+
+      expect(appendLineSpy).toHaveBeenCalledWith("activate start");
+      expect(appendLineSpy).toHaveBeenCalledWith("activate ready");
+    });
+  });
+
+  describe("activate trace order", () => {
+  const appendLineSpy = vi.fn();
+
+  beforeEach(() => {
+    appendLineSpy.mockClear();
+    vscodeMocks.createOutputChannel.mockClear();
+
+    vscodeMocks.createOutputChannel.mockReturnValue({
+      appendLine: appendLineSpy,
+      write: vi.fn(),
+      clear: vi.fn(),
+        revealIfInPanel: vi.fn(),
+        dispose: vi.fn(),
+      });
+    });
+
+    it("A段階: activate trace logs call both start and ready", async () => {
+      const { activate } = await import("../src/extension");
+
+      await activate(context);
+
+      expect(appendLineSpy).toHaveBeenCalledWith("activate start");
+      expect(appendLineSpy).toHaveBeenCalledWith("activate ready");
+    });
+
+    it("B段階: activate trace order is strictly start then ready", async () => {
+      const { activate } = await import("../src/extension");
+
+      await activate(context);
+
+      expect(appendLineSpy).toHaveBeenNthCalledWith(1, "activate start");
+      expect(appendLineSpy).toHaveBeenNthCalledWith(2, "activate ready");
+    });
   });
 });

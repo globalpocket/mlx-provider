@@ -379,3 +379,108 @@ function getOrCreateTraceOutputChannel(
 - **OutputChannel初期化境界の固定化**: `createOutputChannel` 呼び出しを専用境界へ限定し、重複生成なしをテストで固定。
 - **テスト先行**: Red 失敗（未呼び出し / 回数不一致 / 名前不一致）を先に確認。
 - **Coverage 85%以上維持**: テスト実行フェーズで継続評価し、品質ゲートとして必須化。
+
+## 14. Issue #9: 起動イベントトレース出力の固定
+
+### 14.1 目的
+
+- issue `globalpocket/mlx-provider#9` の要求に従い、[`activate()`](../src/extension.ts:7) の開始と完了を出力パネルへ定型ログとして記録する契約を固定する。
+- 1 TDD サイクルで 1 つの観測可能振る舞いだけを扱い、Issue #9 では「起動開始ログ」と「起動成功ログ」の 2 イベント順序を単一の振る舞いとして定義する。
+
+### 14.2 スコープ
+
+#### 対象
+
+- [`src/extension.ts`](../src/extension.ts) における起動イベントの trace 出力順序。
+- [`tests/extension.test.ts`](../tests/extension.test.ts) における Red 先行の期待固定。
+- 既存の provider 登録契約と `deactivate()` 停止契約を壊さない境界追加。
+
+#### 非対象
+
+- `mlx_lm.server` の stdout/stderr 転送仕様。
+- 失敗時エラートレース仕様（Issue #10 以降の別振る舞い）。
+- [package.json](../package.json) や CI 設定の変更。
+
+### 14.3 責務分割
+
+- **拡張エントリ責務**（[`activate()`](../src/extension.ts:7)）
+  - 起動開始時に trace ログを 1 回出力する。
+  - provider 登録成功後に起動完了ログを 1 回出力する。
+  - 既存の `ServerManager` 生成、provider 登録、subscription 登録契約を維持する。
+
+- **trace 出力境界責務**（`src/extension.ts` の module-private 関数）
+  - 起動イベントの文言フォーマットを 1 箇所へ集約する。
+  - `OutputChannel` 取得境界（Issue #8 で固定）を再利用し、`activate()` 本体へ文字列直書きを分散させない。
+
+### 14.4 公開インターフェース方針
+
+- 外部公開 API は増やさず、[`activate()`](../src/extension.ts:7) / [`deactivate()`](../src/extension.ts:18) 契約を維持する。
+- module-private の起動 trace 境界を追加し、次の内部インターフェースを設計契約とする。
+
+```ts
+const TRACE_START_MESSAGE = "[activate] start";
+const TRACE_READY_MESSAGE = "[activate] ready";
+
+function appendActivationTrace(
+  channel: Pick<vscode.OutputChannel, "appendLine">,
+  message: string,
+): void;
+```
+
+- `appendActivationTrace(...)` 契約:
+  - `activate()` の開始時と成功時にのみ呼び出す。
+  - 1 回の `activate()` で start → ready の順序を維持する。
+  - `deactivate()` 側からは呼び出さない。
+
+### 14.5 テスト観点（TDD）
+
+#### Red
+
+- [`tests/extension.test.ts`](../tests/extension.test.ts) で次を先に失敗させる。
+  1. [`activate()`](../src/extension.ts:7) 実行時に start ログ未出力なら失敗。
+  2. provider 登録成功後に ready ログ未出力なら失敗。
+  3. 出力順序が start → ready でない場合は失敗。
+
+#### Green
+
+- [`src/extension.ts`](../src/extension.ts) に最小実装を追加し、上記 Red を解消する。
+- 既存契約（`register()` の返却 disposable を `context.subscriptions` へ追加、`deactivate()` の停止契約）を維持する。
+
+#### Refactor
+
+- 起動 trace 文言と出力呼び出しを helper へ局所化し、`activate()` の責務を増やしすぎない。
+- 既存の OutputChannel 境界を再利用し、重複ロジックを追加しない。
+
+#### Evaluation
+
+- 関連ユニットテスト成功を確認する。
+- [`tests/extension.test.ts`](../tests/extension.test.ts) を含む対象テスト群で coverage 85%以上を維持する。
+- 後続品質ゲートとして `security-auditor` Pass と `reviewer` Pass を必須とする。
+
+### 14.6 受け入れ条件へのトレーサビリティ
+
+- **開始/完了の 2 イベント出力**: start と ready がそれぞれ 1 回ずつ出力されることを固定。
+- **順序保証**: start → ready の時系列順をテストで固定し、回帰を防止。
+- **ライフサイクル非破壊**: provider 登録と `deactivate()` 契約を維持し、既存責務を壊さない。
+- **品質ゲート**: TDD Red-Green-Refactor、coverage 85%以上、`security-auditor` Pass、`reviewer` Pass を必須化。
+
+### 14.7 B段階ゲート再定義（Contract Mismatch 是正）
+
+- 背景: B段階の `test-red` 実行結果は [`artifacts/test-results/issue-9-red-b.log`](../artifacts/test-results/issue-9-red-b.log) のとおり全件passであり、未実装を示す失敗を観測できなかった。この状態で Red 必須ゲートを維持すると、実装済み振る舞いに対して Red を要求し続ける契約不整合となる。
+- 是正方針: A段階で成立済みの Red→Green を保持し、B段階は `test-red` 必須を解除して `test-green` 回帰確認 + coverage 判定へ再定義する。
+
+1. **A段階の位置づけ固定（変更なし）**
+   - 目的: `appendLine` 呼び出し存在の未成立を Red として観測し、Green で解消する。
+   - 判定規約: A段階の Red/Green 証跡を有効な基準として保持し、B段階の再判定理由に利用する。
+
+2. **B段階ゲートの置換（Red必須解除）**
+   - 前提: A段階 Green 済み、かつ B段階 `test-red` が全件pass。
+   - 新ゲート: `tester` が回帰実行した `test-green` 結果と coverage 結果を `consistency-checker` が判定する。
+   - 判定規約: B段階では `unexpected-red`（全件pass）を失敗扱いしない。完了条件は `test-green: pass` + `coverage: pass` + Forbidden Files 非変更とする。
+
+3. **次モードの固定順序（SoD）**
+   - 実行順は `tester` → `consistency-checker` → `security-auditor` → `reviewer` に固定する。
+   - `tester` は [`artifacts/test-results/issue-9-green-b.log`](../artifacts/test-results/issue-9-green-b.log) と [`artifacts/coverage/issue-9-green-b.log`](../artifacts/coverage/issue-9-green-b.log) へ保存する。
+   - `consistency-checker` は `test-green` / `coverage` のみ判定し、Red 成立判定へ戻さない。
+
+- 影響範囲最小化: 再設計は B段階の判定契約と実行順のみを変更し、[`src/extension.ts`](../src/extension.ts) の公開 API、provider 登録契約、[`deactivate()`](../src/extension.ts:18) 停止契約は変更しない。

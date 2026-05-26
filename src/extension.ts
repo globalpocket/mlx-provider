@@ -11,11 +11,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   serverManager = new ServerManager();
 
   traceOutputChannel ??= vscode.window.createOutputChannel(TRACE_OUTPUT_CHANNEL_NAME);
+  traceOutputChannel.appendLine("activate start");
 
   const provider = new MlxLanguageModelProvider(serverManager, (providerInstance) => {
     return providerInstance.register();
   });
   const providerDisposable = provider.register();
+
+  traceOutputChannel.appendLine("activate ready");
 
   context.subscriptions.push(providerDisposable);
 }

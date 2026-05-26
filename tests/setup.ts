@@ -15,11 +15,22 @@ const vscodeMocks = vi.hoisted(() => {
   const disposableReturn = { dispose: vi.fn() };
   const disposableFromMock = vi.fn(() => disposableReturn);
 
+  const createOutputChannelSpy = vi.fn();
+  const createOutputChannel = vi.fn(() => ({
+    write: vi.fn(),
+    appendLine: vi.fn(),
+    clear: vi.fn(),
+    revealIfInPanel: vi.fn(),
+    dispose: vi.fn(),
+  }));
+
   return {
     getMock,
     getConfigurationMock,
     disposableReturn,
     disposableFromMock,
+    createOutputChannelSpy,
+    createOutputChannel,
   };
 });
 
@@ -33,6 +44,9 @@ vi.mock("vscode", () => ({
   },
   lm: {
     registerChatModelProvider: vi.fn(),
+  },
+  window: {
+    createOutputChannel: vscodeMocks.createOutputChannel,
   },
 }));
 

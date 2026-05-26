@@ -64,3 +64,72 @@
 
 - 最初の委任は PR 作成直前の最終調整として orchestrator に引き継ぐ。
 - 根拠: 設計、計画、packaging、security、review の整合は完了しており、以後は Markdown 更新ではなく PR 生成フローの調整が最小権限となる。
+
+## Issue #8 実行計画: OutputChannel 初期化境界固定
+
+### 実行方針
+
+- 対象は [`src/extension.ts`](../src/extension.ts) と [`tests/extension.test.ts`](../tests/extension.test.ts) のみに限定する。
+- Action Contract に従い、本タスクでは設計と計画の更新のみを行い、実装・テスト実行・妥当性判定は後続モードへ分離する。
+- SoD 分離された TDD 順序を厳守し、1 サブタスク 1 目的を維持する。
+- 各サブタスクは Red→Green→Refactor と coverage 85%以上の完了条件を明記する。
+
+### SoD 分離チェックリスト
+
+- [ ] **Issue8-Task1 / test-writer**: [`tests/extension.test.ts`](../tests/extension.test.ts) のみを編集し、OutputChannel 初期化境界を固定する Red テストを追加する。Acceptance Criteria: Red 失敗を意図したテストのみ追加されること、`createOutputChannel` 未呼び出しまたは呼び出し回数不一致を検出できること、チャネル名 `MLX Provider Trace` の不一致を失敗として検出できること、実装コードと設定ファイルを変更しないこと。
+- [ ] **Issue8-Task2 / tester**: Issue8-Task1 のテスト実行結果を取得し、Expected Red Signature と一致する失敗を確認する。Acceptance Criteria: 実行コマンド、終了コード、失敗テスト名、主要エラーが要約されること、一致する Red 失敗を成功条件として記録すること。
+- [ ] **Issue8-Task3 / consistency-checker**: Red 結果が「OutputChannel 未生成または回数不一致」シグネチャと一致するか検証する。Acceptance Criteria: Red 成立/不成立が明示されること、不一致時は code/debug へ進まず差し戻し判断が示されること。
+- [ ] **Issue8-Task4 / code**: [`src/extension.ts`](../src/extension.ts) のみを編集し、OutputChannel 生成 1 回・同名固定・再利用契約を満たす最小実装を行う。Acceptance Criteria: Red→Green→Refactor を踏むこと、`vscode.window.createOutputChannel` の初期化境界が局所化されること、既存の provider 登録契約と `deactivate()` の停止契約を破壊しないこと、編集対象が 1 ファイルに限定されること。
+- [ ] **Issue8-Task5 / tester**: Issue8-Task4 後の関連ユニットテストと coverage を再実行し Green を確認する。Acceptance Criteria: 失敗テストが解消されること、対象 coverage 85%以上が数値で確認できること、重複生成がないことをテスト結果で確認できること。
+- [ ] **Issue8-Task6 / consistency-checker**: Green 結果と coverage 品質ゲートを検証する。Acceptance Criteria: coverage 85%以上、Red で固定した失敗条件が Green で解消された事実、Forbidden Files 非変更が確認されること。
+- [ ] **Issue8-Task7 / security-auditor**: OutputChannel 境界変更に対するセキュリティ監査を実施する。Acceptance Criteria: ハードコード秘密情報なし、不要依存追加なし、監査 Pass/Fail と重大指摘有無が提示されること。
+- [ ] **Issue8-Task8 / reviewer**: 設計整合性と責務分割の最終監査を実施する。Acceptance Criteria: [`plans/design.md`](./design.md) の Issue #8 設計と実装が整合すること、差し戻し要否が明示されること、TDD と SoD の実行証跡が確認できること。
+
+### タスク別スコープ固定
+
+- Read Files: [`plans/design.md`](./design.md), [`plans/task_plan.md`](./task_plan.md), [`src/extension.ts`](../src/extension.ts), [`tests/extension.test.ts`](../tests/extension.test.ts)
+- Edit Files (実装フェーズ): [`tests/extension.test.ts`](../tests/extension.test.ts), [`src/extension.ts`](../src/extension.ts)
+- Forbidden Files: [`package.json`](../package.json) および Issue #8 の目的外ファイル全般
+
+### 品質ゲート
+
+- TDD: Red 失敗確認 → Green 最小実装 → 必要最小限 Refactor
+- Coverage: 対象テスト群で 85%以上
+- SoD: test-writer→tester→consistency-checker→code/debug→tester→consistency-checker→security-auditor→reviewer
+- 監査: security-auditor Pass かつ reviewer Pass
+
+## Issue #9 実行計画: 起動イベントを出力パネルへ記録
+
+### 実行方針
+
+- 対象は [`tests/extension.test.ts`](../tests/extension.test.ts) と [`src/extension.ts`](../src/extension.ts) の 2 ファイルに限定する。
+- 1 TDD サイクル = 1 観測可能振る舞いとして「activate start→ready の順序出力」を単一ゴールに固定する。
+- Action Contract に従い、設計更新後は test-writer から順に SoD 分離で実行する。
+
+### Gate 6 再設計チェックリスト（A段階Green成立後のB段階再定義）
+
+- [ ] **Issue9-Task1A / test-writer（Red-A作成）**: [`tests/extension.test.ts`](../tests/extension.test.ts) のみを編集し、`appendLine` 呼び出し存在を観測する Red テストへ最小分割する。Acceptance Criteria: Red→Green→Refactor の Red 専任であること、対象は [tests/extension.test.ts](../tests/extension.test.ts) のみであること、`activate start` / `activate ready` の未出力を検出すること、順序断言 `toHaveBeenNthCalledWith` はこの段階で導入しないこと、coverage 85%以上ゲートへ接続できる粒度であること。
+- [ ] **Issue9-Task2A / tester（Red-A実行）**: Issue9-Task1A のみを実行し、Red 実行結果を Artifact へ保存する。Acceptance Criteria: failing test 名、終了コード、主要エラーが取得されること、失敗が `appendLine` 未観測系（例 `toContain` 不一致、`toHaveBeenCalledWith` 不一致、`Number of calls: 0`）であること。
+- [ ] **Issue9-Task3A / consistency-checker（Red-A判定）**: Expected Red Signature-A と実行結果の一致を判定する。Acceptance Criteria: `unexpected-red` とせず `expected-red-match` として扱えること、不一致時は code へ進めず test-writer へ差し戻し先が明示されること。
+- [ ] **Issue9-Task4 / code（Green-A最小実装）**: [`src/extension.ts`](../src/extension.ts) のみを編集し、`activate` 実行時に start/ready の 2 文言を出力する最小実装を追加する。Acceptance Criteria: Red→Green→Refactor を踏むこと、編集対象は [src/extension.ts](../src/extension.ts) のみであること、既存の `register()` disposable 契約と `deactivate()` 停止契約を壊さないこと。
+- [ ] **Issue9-Task5 / tester（Green-A実行）**: Issue9-Task4 後に対象テストを再実行し、Green-A を確認する。Acceptance Criteria: A段階の失敗が解消されること、終了コードと主要結果が Artifact に保存されること。
+- [ ] **Issue9-Task6 / consistency-checker（Gate 6 判定）**: Green-A 成立を Gate 6 完了条件として判定する。Acceptance Criteria: `test-green: pass` が確認できること、Gate 6 の判定対象は「呼び出し存在の成立」に限定すること、coverage 85%以上判定は後段 Gate 7 で評価すること。
+- [ ] **Issue9-Task7B / tester（B段階Green回帰実行）**: B段階は `unexpected-red`（全件pass）を再発させないため、Red要求を外し、Issue9 関連テストと coverage を実行して回帰確認を行う。Acceptance Criteria: `artifacts/test-results/issue-9-red-b.log` の「全件pass」を既実装成立事実として採用すること、`artifacts/test-results/issue-9-green-b.log` と `artifacts/coverage/issue-9-green-b.log` に最新結果が保存されること、対象 coverage 85%以上が確認可能であること。
+- [ ] **Issue9-Task8B / consistency-checker（B段階品質判定）**: B段階の判定を `test-green` + `coverage` に置換し、Contract Mismatch 是正後の品質ゲートを確定する。Acceptance Criteria: `test-green: pass` と `coverage: pass` を判定できること、`test-red` 未実行が契約どおり扱われること、Forbidden Files 非変更が確認できること。
+- [ ] **Issue9-Task9 / security-auditor（監査）**: 追加した trace 文言と境界がセキュリティ上問題ないことを監査する。Acceptance Criteria: Pass/Fail と重大指摘の有無が明示されること。
+- [ ] **Issue9-Task10 / reviewer（最終監査）**: [`plans/design.md`](./design.md) の Issue #9 設計と実装整合性を監査する。Acceptance Criteria: 差し戻し要否が明示されること、TDD と品質ゲート通過証跡が確認できること。
+
+### B段階ゲート再定義（Issue #9 / Contract Mismatch 是正）
+
+- A段階（観測境界）: Red→Green は成立済みとして保持する。  
+  例: `appendLine` 呼び出し存在の未成立を Red として扱い、A段階で解消済み。
+- B段階（順序境界）: `artifacts/test-results/issue-9-red-b.log` が全件passであるため、未実装を示す Red は成立しない。  
+  例: `test-red` を必須ゲートから外し、`test-green` 回帰確認と coverage 判定を必須ゲートへ置換する。
+- 判定規約: B段階で `unexpected-red`（全件pass）を失敗扱いしない。Contract Mismatch 是正後は `test-green: pass` + `coverage: pass` を完了条件とする。
+
+### 次モード向け最小引継ぎ（最大8行）
+
+- tester: `npm run test -- tests/extension.test.ts` と `npm run coverage` を実行し、`artifacts/test-results/issue-9-green-b.log` と `artifacts/coverage/issue-9-green-b.log` へ保存。
+- consistency-checker: Check Type を `test-green` と `coverage` で実行し、`artifacts/test-results/issue-9-green-b.log` と `artifacts/coverage/issue-9-green-b.log` を一次情報に判定。
+- 判定条件: B段階は `test-red` を要求しない。`test-green: pass` + `coverage: pass` + Forbidden Files 非変更で通過。
+- 後続ゲート: `security-auditor` → `reviewer` を順に実行し、Issue #9 の最終品質を確定する。

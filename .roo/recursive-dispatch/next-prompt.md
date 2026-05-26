@@ -1,0 +1,1 @@
+認証済みGitHubユーザーにassignされたopen Issueを確認し、存在すればOrchestratorへ投入し、存在しなければ待機後に自己再投入してください。

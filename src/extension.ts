@@ -1,6 +1,5 @@
-import * as vscode from "vscode";
-import { MlxLanguageModelProvider } from "./provider";
-import { ServerManager } from "./serverManager";
+import * as vscode from 'vscode';
+import { MLXProvider } from './mlx-provider';
 
 const TRACE_OUTPUT_CHANNEL_NAME = "MLX Provider Trace";
 let traceOutputChannel: vscode.OutputChannel | undefined;
@@ -23,9 +22,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(providerDisposable);
 }
 
-export async function deactivate(): Promise<void> {
-  if (serverManager) {
-    await serverManager.stop();
-    serverManager = undefined;
-  }
+export function deactivate() {
+    // Cleanup if needed
 }

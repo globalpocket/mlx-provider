@@ -133,3 +133,58 @@
 - consistency-checker: Check Type を `test-green` と `coverage` で実行し、`artifacts/test-results/issue-9-green-b.log` と `artifacts/coverage/issue-9-green-b.log` を一次情報に判定。
 - 判定条件: B段階は `test-red` を要求しない。`test-green: pass` + `coverage: pass` + Forbidden Files 非変更で通過。
 - 後続ゲート: `security-auditor` → `reviewer` を順に実行し、Issue #9 の最終品質を確定する。
+
+## Issue #10 実行計画: activate 失敗時の message/stack 出力と再throw
+
+### 実行方針
+
+- 対象は [`tests/extension.test.ts`](../tests/extension.test.ts) と [`src/extension.ts`](../src/extension.ts) の 2 ファイルに限定する。
+- 1サブタスク1目的・1完了条件を維持し、SoD 分離された TDD 順序で進行する。
+- 失敗時ログ契約は「message/stack 出力 + 再throw + 正常系ログとの混線なし」を同一ゴールとして固定する。
+
+### SoD 分離チェックリスト
+
+- [ ] **Issue10-Task1 / test-writer**: [`tests/extension.test.ts`](../tests/extension.test.ts) のみを編集し、activate 失敗時の Red テストを追加する。Acceptance Criteria: 例外発生時に message 未出力で失敗するテストがあること、stack あり Error で stack 未出力を失敗として検出できること、再throw 欠落を失敗として検出できること、失敗時に `activate ready` が呼ばれた場合を混線として失敗させること。
+- [ ] **Issue10-Task2 / tester**: Issue10-Task1 のテスト実行結果を取得し、Expected Red Signature と一致する失敗を記録する。Acceptance Criteria: 実行コマンド、終了コード、失敗テスト名、主要エラーを Artifact に保存できること。
+- [ ] **Issue10-Task3 / consistency-checker**: Red 判定を実行し、message/stack 未出力または再throw 欠落シグネチャとの一致を確認する。Acceptance Criteria: `expected-red-match` / `unexpected-red` が明示されること、不一致時に code/debug へ進めないこと。
+- [ ] **Issue10-Task4 / code**: [`src/extension.ts`](../src/extension.ts) のみを編集し、activate の例外捕捉・message/stack 出力・再throw を満たす最小実装を追加する。Acceptance Criteria: Red→Green→Refactor を踏むこと、失敗時に `activate ready` を出力しないこと、既存の provider 登録契約と `deactivate()` 契約を破壊しないこと。
+- [ ] **Issue10-Task5 / tester**: Issue10-Task4 後に関連テストと coverage を再実行し、Green を確認する。Acceptance Criteria: Issue10 の失敗が解消されること、coverage 85%以上を確認可能な結果を Artifact へ保存すること。
+- [ ] **Issue10-Task6 / consistency-checker**: Green と coverage 判定を実行する。Acceptance Criteria: `test-green: pass` と `coverage: pass` が確認できること、Forbidden Files 非変更を確認できること。
+- [ ] **Issue10-Task7 / security-auditor**: 例外ログ追加に対するセキュリティ監査を実施する。Acceptance Criteria: Pass/Fail と重大指摘有無が提示されること、秘密情報混入なしを確認できること。
+- [ ] **Issue10-Task8 / reviewer**: [`plans/design.md`](./design.md) の Issue #10 契約と実装整合性を最終監査する。Acceptance Criteria: 差し戻し要否が明示されること、TDD と品質ゲート通過証跡が確認できること。
+
+### 品質ゲート
+
+- TDD: `test-writer` → `tester` → `consistency-checker` → `code/debug` → `tester` → `consistency-checker`
+- Coverage: 対象テスト群で 85%以上
+- 監査: `security-auditor` Pass かつ `reviewer` Pass
+
+### 次モード向け最小引継ぎ（最大8行）
+
+- test-writer: [`tests/extension.test.ts`](../tests/extension.test.ts) のみ編集し、activate 失敗時の message/stack/再throw/ready混線防止を Red で固定。
+- tester: `npm run test -- tests/extension.test.ts` と `npm run coverage` を実行し、Issue10 用 Artifact Path へ保存。
+- consistency-checker: `test-red` / `test-green` / `coverage` を段階ごとに判定し、Expected Red Signature 一致と coverage 85%以上を確認。
+- code/debug: [`src/extension.ts`](../src/extension.ts) だけで最小修正し、失敗時のログ出力と再throwを満たす。
+- 後続ゲート: `security-auditor` → `reviewer` を必須実行。
+
+## Issue #10 契約再同期ミニ計画: `registered` ownership と停止責務
+
+### 実行方針
+
+- 対象契約は [`plans/design.md`](./design.md) の「16. Issue #10 追加是正」に固定し、実装・テスト・判定を SoD 分離で再委任する。
+- 1サブタスク1目的、編集対象は各サブタスクで 1〜2 ファイルに制限する。
+
+### 最小TDD再委任チェックリスト
+
+- [ ] **Issue10-Ownership-Task1 / test-writer**: [`tests/extension.test.ts`](../tests/extension.test.ts) のみを編集し、`dispose()` が `ServerManager.stop()` を呼ばないこと、`deactivate()` のみが stop を呼ぶことを Red で固定する。Acceptance Criteria: Red-Green-Refactor の Red 専任であること、`registered` 再利用前提の期待を残さないこと、後続の coverage 85%以上確認へ接続できること。
+- [ ] **Issue10-Ownership-Task2 / tester**: Task1 の対象テスト実行結果を Artifact へ保存する。Acceptance Criteria: 失敗テスト名・終了コード・主要エラーが記録されること、Red 証跡として次工程へ引き渡せること、coverage 85%以上確認コマンド候補を保持できること。
+- [ ] **Issue10-Ownership-Task3 / code/debug**: [`src/extension.ts`](../src/extension.ts) と [`src/serverManager.ts`](../src/serverManager.ts) の最小修正で ownership/lifecycle 契約へ実装を同期する。Acceptance Criteria: Red-Green-Refactor の Green 最小実装であること、`ServerManager` から `registered` 所有を除去すること、`deactivate()` だけが `stop()` を呼ぶこと。
+- [ ] **Issue10-Ownership-Task4 / tester**: Task3 後に関連ユニットテストと coverage を再実行する。Acceptance Criteria: Green 成立、終了コード 0、coverage 85%以上を Artifact から確認可能であること。
+- [ ] **Issue10-Ownership-Task5 / consistency-checker**: `test-green` と `coverage` を判定する。Acceptance Criteria: `test-green: pass` と `coverage: pass` を満たすこと、Forbidden Files 非変更を確認できること、契約不一致が残る場合は差し戻し先を明示できること。
+- [ ] **Issue10-Ownership-Task6 / reviewer**: [`plans/design.md`](./design.md) と実装・テストの契約整合を最終監査する。Acceptance Criteria: ownership/lifecycle 契約不整合が解消されていること、差し戻し要否が明示されること。
+
+### 契約変更で必須になるテスト観点（最大3件）
+
+1. [`tests/extension.test.ts`](../tests/extension.test.ts): `provider.register()` 返却 disposable が `context.subscriptions` へ同一参照で追加される。
+2. [`tests/extension.test.ts`](../tests/extension.test.ts): `dispose()` では `stop()` が呼ばれず、[`deactivate()`](../src/extension.ts:91) でのみ `stop()` が 1 回呼ばれる。
+3. [`tests/provider.test.ts`](../tests/provider.test.ts): [`register()`](../src/provider.ts:25) は boundary 委譲と返却のみを行い、runtime `start()` / `stop()` を呼ばない。

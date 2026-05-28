@@ -484,3 +484,138 @@ function appendActivationTrace(
    - `consistency-checker` は `test-green` / `coverage` のみ判定し、Red 成立判定へ戻さない。
 
 - 影響範囲最小化: 再設計は B段階の判定契約と実行順のみを変更し、[`src/extension.ts`](../src/extension.ts) の公開 API、provider 登録契約、[`deactivate()`](../src/extension.ts:18) 停止契約は変更しない。
+
+## 15. Issue #10: activate 失敗時のエラートレース契約固定
+
+### 15.1 目的
+
+- issue `globalpocket/mlx-provider#10` の要求に従い、[`activate()`](../src/extension.ts:10) 失敗時に `message` と `stack` を出力し、例外を再 throw する契約を固定する。
+- 正常系トレース（`activate start` / `activate ready`）と失敗系トレースを混線させない可観測性を確保する。
+
+### 15.2 スコープ
+
+#### 対象
+
+- [`src/extension.ts`](../src/extension.ts) の `activate` 内例外ハンドリング境界。
+- [`tests/extension.test.ts`](../tests/extension.test.ts) の activate 失敗系テスト。
+- 失敗時ログ契約（error type / message / stack）と再 throw 契約。
+
+#### 非対象
+
+- `deactivate()` の停止契約変更。
+- provider 登録契約そのものの再設計。
+- `package.json`、CI、依存関係設定の変更。
+
+### 15.3 失敗時ログ契約
+
+- `activate()` は内部処理を `try/catch` 境界で保護し、失敗時に trace チャネルへエラーログを出力する。
+- ログは最低限以下を含む。
+  - error kind（`Error` か非 `Error` かを識別可能な文字列）
+  - message（`Error` の場合は `error.message`、非 `Error` は文字列化結果）
+  - stack（`Error` で `stack` が存在する場合のみ出力）
+- 失敗時の出力後、捕捉した例外は同一参照のまま再 throw する。
+
+### 15.4 正常系との分離条件
+
+- 正常系ログは `activate start` と `activate ready` のみを対象とする。
+- 失敗系ログは `activate ready` の代替ではなく、失敗専用シグネチャとして出力する。
+- 失敗時は `activate ready` を出力しない。
+- 失敗時ログは、正常系順序検証テストと独立に検証できる固定文言プレフィックスを持つ。
+
+### 15.5 公開インターフェース方針
+
+- 外部公開 API は増やさず、[`activate()`](../src/extension.ts:10) / [`deactivate()`](../src/extension.ts:26) を維持する。
+- 例外ログ整形は module-private helper に局所化し、`activate` 本体へ分散させない。
+
+```ts
+function appendActivationErrorTrace(
+  channel: Pick<vscode.OutputChannel, "appendLine">,
+  error: unknown,
+): void;
+```
+
+### 15.6 テスト観点（TDD）
+
+#### Red
+
+- [`tests/extension.test.ts`](../tests/extension.test.ts) で次の失敗を先に観測する。
+  1. activate 失敗時に message ログ未出力。
+  2. activate 失敗時に stack ログ未出力（stack あり Error ケース）。
+  3. activate 失敗時に再 throw されない。
+  4. 失敗ケースで `activate ready` が出力される混線。
+
+#### Green
+
+- [`src/extension.ts`](../src/extension.ts) に最小実装を追加し、上記 Red を解消する。
+- 既存の provider 登録契約と `deactivate()` 契約を維持する。
+
+#### Refactor
+
+- エラーログ整形を helper へ切り出し、`activate` の責務肥大化を防ぐ。
+- 既存 trace 出力境界を再利用し、重複文字列の分散を避ける。
+
+#### Evaluation
+
+- 関連ユニットテスト成功を確認する。
+- 対象テスト群で coverage 85%以上を維持する。
+- 後続品質ゲートとして `security-auditor` Pass と `reviewer` Pass を必須とする。
+
+### 15.7 受け入れ条件トレーサビリティ
+
+- **message/stack 出力**: 失敗時に message と stack（存在時）を出力。
+- **再 throw 契約**: 出力後に同一例外を再 throw。
+- **混線防止**: 失敗時に `activate ready` を出力しない。
+- **品質ゲート**: TDD Red-Green-Refactor、coverage 85%以上、`security-auditor` Pass、`reviewer` Pass。
+
+## 16. Issue #10 追加是正: `registered` ownership と停止責務の再同期
+
+### 16.1 背景と不整合
+
+- 現在の実装には [`src/serverManager.ts`](../src/serverManager.ts) の `registered` 保持設計と、[`src/extension.ts`](../src/extension.ts) 側の登録 disposable 生成・停止処理が混在しており、ownership と lifecycle が二重化している。
+- analyzer 指摘どおり、`ServerManager` へ `registered` を持たせる設計は、登録資源とプロセス停止責務を混線させ、`getter` 再帰・`setter` 欠落の不整合を生む。
+- 現行の不整合箇所（一次情報）:
+  - [`ServerManager`](../src/serverManager.ts) は `private registered` と同名の `get registered()` を併置しており、自己参照 getter による契約破綻を内包する。
+  - [`activate()`](../src/extension.ts) の registration boundary 実装が disposable `dispose()` 内から `stop()` を呼ぶため、登録解除責務と停止責務が混在している。
+  - `deactivate()` と disposable `dispose()` の双方が停止経路になり得るため、停止責務の唯一性が失われている。
+
+### 16.2 正規化契約
+
+- **登録資源 ownership（唯一）**
+  - `provider.register()` が返す `vscode.Disposable` の所有者は [`src/extension.ts`](../src/extension.ts) のみとする。
+  - `ServerManager` は登録 disposable を保持しない。`registered` フィールド、`registered` getter/setter、登録資源の再利用ロジックを持たない。
+  - [`MlxLanguageModelProvider.register()`](../src/provider.ts:25) は boundary 委譲と返却だけを担当し、登録資源の保持・再 dispose・停止呼び出しを行わない。
+
+- **lifecycle / stop 責務（唯一）**
+  - [`ServerManager.stop()`](../src/serverManager.ts:9) を呼び出す責務は [`deactivate()`](../src/extension.ts:91) のみとする。
+  - `register()` の返却 disposable の `dispose()` は登録解除に限定し、`ServerManager.stop()` を呼ばない。
+  - [`activate()`](../src/extension.ts:10) は `ServerManager.stop()` を呼ばない。失敗時ログ契約と登録処理に専念する。
+
+- **許可される制御フロー（最小）**
+  1. [`activate()`](../src/extension.ts:10) が `ServerManager` を生成する。
+  2. `MlxLanguageModelProvider` を生成し、[`register()`](../src/provider.ts:25) を 1 回呼ぶ。
+  3. 返却 disposable を `context.subscriptions` へ追加する。
+  4. [`deactivate()`](../src/extension.ts:91) が保持中 `ServerManager` に対して `stop()` を 1 回呼ぶ。
+
+- **責務境界の一意化（Issue #10 reviewer fail 解消要件）**
+  - `ServerManager` は「プロセス状態 (`running`)」のみを所有する。
+  - `MlxLanguageModelProvider` は「登録実行の委譲と disposable 返却」のみを所有する。
+  - `extension` は「登録結果 disposable の購読ライフサイクル連携」と「終了時 stop 呼び出し」のみを所有する。
+  - いずれの層も他層の所有責務を再保持しない（再所有禁止）。
+
+### 16.3 禁止パターン
+
+- `ServerManager` に `registered` ownership を持ち込む。
+- 登録 disposable の `dispose()` から `ServerManager.stop()` を呼ぶ。
+- [`activate()`](../src/extension.ts:10) 内で `registered` 再利用判定を行い、停止責務を登録境界へ混在させる。
+
+### 16.4 テスト観点（契約変更で必須）
+
+1. [`tests/extension.test.ts`](../tests/extension.test.ts): [`activate()`](../src/extension.ts:10) 後に `provider.register()` 返却 disposable が `context.subscriptions` へ同一参照で追加される。
+2. [`tests/extension.test.ts`](../tests/extension.test.ts): `dispose()` 実行では `ServerManager.stop()` は呼ばれず、[`deactivate()`](../src/extension.ts:91) 呼び出し時にのみ 1 回呼ばれる。
+3. [`tests/provider.test.ts`](../tests/provider.test.ts): [`register()`](../src/provider.ts:25) は boundary 委譲と返却のみで、runtime の `start()` / `stop()` を呼ばない。
+
+### 16.5 実装同期の受け入れ基準（設計起点）
+
+- [`src/serverManager.ts`](../src/serverManager.ts) から `registered` 関連状態と accessor が除去され、`running` 管理責務のみが残る。
+- [`src/extension.ts`](../src/extension.ts) の registration boundary が「`provider.register()` の戻り値生成委譲」のみを担い、`dispose()` から `stop()` を呼ばない。
+- [`deactivate()`](../src/extension.ts:91) のみが停止責務を持つことをテストで観測可能にする。

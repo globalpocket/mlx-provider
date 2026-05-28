@@ -12,17 +12,18 @@ type ProviderRegistrationBoundary = (
 
 export class MlxLanguageModelProvider {
   private readonly serverRuntime: ProviderServerRuntime;
-  private readonly registrationBoundary: ProviderRegistrationBoundary;
+  private readonly registrationBoundary: (provider: MlxLanguageModelProvider) => vscode.Disposable;
 
   constructor(
     serverRuntime: ProviderServerRuntime,
-    registrationBoundary: ProviderRegistrationBoundary
+    registrationBoundary: (provider: MlxLanguageModelProvider) => vscode.Disposable,
   ) {
     this.serverRuntime = serverRuntime;
     this.registrationBoundary = registrationBoundary;
   }
 
   register(): vscode.Disposable {
+    // 登録境界契約：boundary が返す disposable を返す
     return this.registrationBoundary(this);
   }
 }
